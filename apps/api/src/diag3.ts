@@ -1,11 +1,24 @@
 import http from 'http';
+import { loadConfig } from './config.js';
+import { getDb } from './db.js';
+import { buildApp } from './app.js';
 
 const results: string[] = [];
-try {
-  const shared = await import('@repo/shared');
-  results.push('OK shared: ' + Object.keys(shared).slice(0, 5).join(','));
-} catch (e: any) {
-  results.push('FAIL shared: ' + String(e.message || e).substring(0, 200));
+let config: any = null;
+let db: any = null;
+try { config = loadConfig(); results.push('OK loadConfig'); }
+catch (e: any) { results.push('FAIL loadConfig: ' + String(e.message || e).substring(0, 200)); }
+try { db = getDb(); results.push('OK getDb'); }
+catch (e: any) { results.push('FAIL getDb: ' + String(e.message || e).substring(0, 200)); }
+if (config && db) {
+  try {
+    const app = await buildApp({ config, db, logger: false });
+    results.push('OK buildApp');
+    try { await app.db.user.findMany({ take: 1 }); results.push('OK dbCheck'); }
+    catch (e: any) { results.push('FAIL dbCheck: ' + String(e.message || e).substring(0, 200)); }
+  } catch (e: any) {
+    results.push('FAIL buildApp: ' + String(e.message || e).substring(0, 300));
+  }
 }
 
 const port = Number(process.env.PORT) || 3000;
