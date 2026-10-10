@@ -4,9 +4,12 @@
   "name": "@repo/shared",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "esbuild src/index.ts --bundle=false --platform=node --target=node20 --format=esm --outfile=dist/index.js --log-level=warning"
   },
   "types": "dist/index.d.ts",
   "version": "0.1.0",
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
 }
