@@ -10,10 +10,11 @@
     "fastify": "5.2.1",
     "zod": "3.24.1"
   },
-  "description": "repo-system API — Phase 0: secure foundation",
+  "description": "repo-system API \u2014 Phase 0: secure foundation",
   "devDependencies": {
     "@types/bcryptjs": "2.4.6",
     "@types/node": "22.10.2",
+    "esbuild": "^0.28.2",
     "prisma": "6.2.1",
     "tsx": "4.19.2",
     "typescript": "5.7.2",
@@ -33,7 +34,8 @@
     "dev": "tsx watch src/server.ts",
     "prisma:generate": "prisma generate",
     "start": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:prod": "esbuild src/server.ts --bundle --platform=node --packages=external --format=cjs --outfile=dist/server.js --log-level=warning"
   },
   "version": "0.1.0",
   "type": "module"

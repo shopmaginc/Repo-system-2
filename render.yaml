@@ -22,7 +22,7 @@ services:
       npm install --include=dev &&
       npm run build --workspace packages/shared &&
       npm run prisma:generate --workspace apps/api &&
-      npm run build --workspace apps/api
+      npm run build:prod --workspace apps/api
     startCommand: npm start --workspace apps/api
     # Runs before every deploy: applies pending migrations, then seeds.
     # The seed is idempotent (upserts) and in production skips all demo
