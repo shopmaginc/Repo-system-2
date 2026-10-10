@@ -1,5 +1,6 @@
 import http from 'http';
 import { loadConfig } from './config.js';
+import { getDb } from './db.js';
 
 const results: string[] = [];
 try {
@@ -7,6 +8,12 @@ try {
   results.push('OK loadConfig');
 } catch (e: any) {
   results.push('FAIL loadConfig: ' + String(e.message || e).substring(0, 200));
+}
+try {
+  getDb();
+  results.push('OK getDb');
+} catch (e: any) {
+  results.push('FAIL getDb: ' + String(e.message || e).substring(0, 200));
 }
 
 const port = Number(process.env.PORT) || 3000;
