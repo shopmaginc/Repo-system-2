@@ -35,7 +35,7 @@
     "prisma:generate": "prisma generate",
     "start": "node dist/diag2.js",
     "test": "vitest run",
-    "build:prod": "esbuild src/server.ts --bundle --platform=node --packages=external --format=esm --outfile=dist/server.js --log-level=warning && esbuild src/diag.ts --bundle --platform=node --packages=external --format=esm --outfile=dist/diag.js --log-level=warning && esbuild src/diag2.ts --bundle --platform=node --packages=external --format=esm --outfile=dist/diag2.js --log-level=warning",
+    "build:prod": "esbuild src/server.ts --bundle --platform=node --target=node20 --packages=external --format=esm --outfile=dist/server.js --log-level=warning && esbuild src/diag.ts --bundle --platform=node --target=node20 --packages=external --format=esm --outfile=dist/diag.js --log-level=warning && esbuild src/diag2.ts --bundle --platform=node --target=node20 --packages=external --format=esm --outfile=dist/diag2.js --log-level=warning",
     "start:server": "node dist/server.js"
   },
   "version": "0.1.0",
