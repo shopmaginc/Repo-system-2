@@ -1,29 +1,21 @@
 import http from 'http';
 import { loadConfig } from './config.js';
-import { getDb } from './db.js';
-import { buildApp } from './app.js';
+import { createStorage } from './lib/storage.js';
 
 const results: string[] = [];
 let config: any = null;
-let db: any = null;
 try {
   config = loadConfig();
-  results.push('OK loadConfig');
+  results.push('OK loadConfig STORAGE=' + config.STORAGE_BACKEND);
 } catch (e: any) {
   results.push('FAIL loadConfig: ' + String(e.message || e).substring(0, 200));
 }
-try {
-  db = getDb();
-  results.push('OK getDb');
-} catch (e: any) {
-  results.push('FAIL getDb: ' + String(e.message || e).substring(0, 200));
-}
-if (config && db) {
+if (config) {
   try {
-    await buildApp({ config, db, logger: false });
-    results.push('OK buildApp');
+    const s = createStorage(config);
+    results.push('OK createStorage: ' + s.constructor.name);
   } catch (e: any) {
-    results.push('FAIL buildApp: ' + String(e.message || e).substring(0, 300));
+    results.push('FAIL createStorage: ' + String(e.message || e).substring(0, 300));
   }
 }
 
