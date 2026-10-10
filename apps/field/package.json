@@ -1,0 +1,27 @@
+{
+  "name": "@repo/field",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": "true",
+  "type": "module",
+  "devDependencies": {
+    "@types/leaflet": "^1.9.12",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.7.2",
+    "vite": "^6.4.4"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "qrcode": "^1.5.4"
+  }
+}

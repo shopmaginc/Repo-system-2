@@ -1,0 +1,29 @@
+{
+  "description": "All-in-one repossession operations management system — Phase 0: secure foundation",
+  "engines": {
+    "node": ">=20"
+  },
+  "name": "repo-system",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "db:migrate": "npm run db:migrate --workspace apps/api",
+    "db:migrate:prod": "npm run db:migrate:prod --workspace apps/api",
+    "db:seed": "npm run db:seed --workspace apps/api",
+    "dev": "npm run build --workspace packages/shared && npm run dev --workspace apps/api",
+    "prisma:generate": "npm run prisma:generate --workspace apps/api",
+    "test": "npm run test --workspaces --if-present",
+    "dev:field": "npm run dev --workspace apps/field"
+  },
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "dependencies": {
+    "@neon/config": "^1.8.6",
+    "@neon/env": "^1.5.3",
+    "leaflet": "^1.9.4",
+    "qrcode": "^1.5.4"
+  }
+}

@@ -1,0 +1,62 @@
+# Render blueprint — repo-system API (free tier).
+#
+# Deploy: push this repo to GitHub, then in Render → New → Blueprint and
+# point it at the repo. Render reads this file and creates the web service.
+# Secrets marked `sync: false` are filled in by hand in the Render dashboard
+# (see DEPLOY.md). JWT_SECRET gets a generated value automatically.
+#
+# Later ($5/mo path): this same blueprint works on a Starter plan — change
+# `plan: free` to `plan: starter` and add a Render Postgres database instead
+# of Neon. See DEPLOY.md "Later: the $5/mo step".
+
+services:
+  - type: web
+    name: repo-system-api
+    runtime: node
+    plan: free
+    # Shared package first (@repo/shared dist), then Prisma client, then API.
+    # --include=dev: Render sets NODE_ENV=production, which would otherwise
+    # make npm skip devDependencies — but the build needs typescript, the
+    # prisma CLI, and tsx (seed script).
+    buildCommand: >-
+      npm install --include=dev &&
+      npm run build --workspace packages/shared &&
+      npm run prisma:generate --workspace apps/api &&
+      npm run build --workspace apps/api
+    startCommand: npm start --workspace apps/api
+    # Runs before every deploy: applies pending migrations, then seeds.
+    # The seed is idempotent (upserts) and in production skips all demo
+    # data — but it WILL create the SEED_ADMIN_* manager account if set.
+    preDeployCommand: >-
+      npm run db:migrate:prod --workspace apps/api &&
+      npm run db:seed --workspace apps/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # Neon connection string (Craig pastes this in Render)
+      - key: JWT_SECRET
+        generateValue: true # Render generates a long random value
+      # First-run only: Craig sets these once so the seed creates his
+      # manager login, then DELETES them from the dashboard and redeploys.
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_ADMIN_NAME
+        sync: false
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: S3_ENDPOINT
+        sync: false # https://<account-id>.r2.cloudflarestorage.com (Cloudflare R2)
+      - key: S3_BUCKET
+        sync: false # R2 bucket name, e.g. repo-system-uploads
+      - key: S3_ACCESS_KEY_ID
+        sync: false # R2 API token — access key id
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false # R2 API token — secret access key
+      - key: S3_REGION
+        value: auto
+      - key: CORS_ORIGIN
+        sync: false # Cloudflare Pages URL, e.g. https://repo-field.pages.dev

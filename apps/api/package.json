@@ -1,0 +1,40 @@
+{
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1149.0",
+    "@fastify/cors": "10.0.1",
+    "@fastify/jwt": "9.1.0",
+    "@fastify/multipart": "^9.0.1",
+    "@prisma/client": "6.2.1",
+    "@repo/shared": "*",
+    "bcryptjs": "3.0.2",
+    "fastify": "5.2.1",
+    "zod": "3.24.1"
+  },
+  "description": "repo-system API — Phase 0: secure foundation",
+  "devDependencies": {
+    "@types/bcryptjs": "2.4.6",
+    "@types/node": "22.10.2",
+    "prisma": "6.2.1",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2",
+    "vitest": "3.0.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "dist/server.js",
+  "name": "@repo/api",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:prod": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "dev": "tsx watch src/server.ts",
+    "prisma:generate": "prisma generate",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "version": "0.1.0",
+  "type": "module"
+}

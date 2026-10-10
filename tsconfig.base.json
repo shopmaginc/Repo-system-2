@@ -1,0 +1,1 @@
+{"compilerOptions":{"baseUrl":".","composite":true,"declaration":true,"declarationMap":true,"esModuleInterop":true,"forceConsistentCasingInFileNames":true,"lib":["ES2022"],"module":"NodeNext","moduleResolution":"NodeNext","paths":{"@repo/shared":["packages/shared"]},"resolveJsonModule":true,"skipLibCheck":true,"sourceMap":true,"strict":true,"target":"ES2022"}}

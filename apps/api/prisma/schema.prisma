@@ -1,0 +1,622 @@
+// Phase 1 Prisma schema — case operations core.
+// Phase 0 built the secure foundation (auth, roles, permission matrix, audit);
+// Phase 1 adds the 11-stage case lifecycle, debtor/asset records, documents,
+// tasks, and status history. Everything case-related stays behind the
+// Phase 0 permission guards.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  active
+  suspended
+  revoked
+}
+
+enum AccessLevel {
+  hidden
+  read
+  write
+}
+
+model Role {
+  id                  String            @id @default(cuid())
+  // agent | transport_driver | lot_attendant | office_clerk | manager
+  name                String            @unique
+  description         String?
+  // Lot-capture duties (in-depth photo intake at the lot) can be granted to
+  // every role via this flag instead of being tied to the lot_attendant title.
+  canCaptureLotPhotos Boolean           @default(false)
+  users               User[]
+  fieldPermissions    FieldPermission[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  phone         String?
+  passwordHash  String
+  roleId        String
+  role          Role           @relation(fields: [roleId], references: [id])
+  status        UserStatus     @default(active)
+  photoUrl      String?
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+  assignedCases Case[]         @relation("CaseAssignment")
+  assignedTasks Task[]         @relation("TaskAssignment")
+  checkIns      CheckIn[]      @relation("UserCheckIns")
+  // Phase 3: photos uploaded, lot assignments made, inspections filed.
+  photos            Photo[]             @relation("PhotoUploader")
+  lotAssignments    CaseLotAssignment[] @relation("LotAssigner")
+  inspections       InspectionChecklist[] @relation("ChecklistInspector")
+  conditionReports  ConditionReport[]   @relation("ConditionReporter")
+  invoices          Invoice[]           @relation("InvoiceCreator")
+  // Phase 4: skip worksheets updated, deep-pull requests, email drafts.
+  worksheetUpdates SkipWorksheet[]     @relation("WorksheetUpdater")
+  skipPullRequests SkipPull[]          @relation("PullRequester")
+  emailDrafts      EmailDraft[]        @relation("EmailDrafter")
+  emailsApproved   EmailDraft[]        @relation("EmailApprover")
+  // Phase 5: conversations created, memberships, messages, directory, time off.
+  conversationsCreated Conversation[]     @relation("ConversationCreator")
+  conversationMemberships ConversationMember[]
+  messagesSent     Message[]           @relation("MessageSender")
+  directoryContactsAdded DirectoryContact[] @relation("DirectoryAdder")
+  timeOffRequests  TimeOffRequest[]    @relation("TimeOffRequester")
+  timeOffDecided   TimeOffRequest[]    @relation("TimeOffDecider")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model FieldPermission {
+  id        String      @id @default(cuid())
+  roleId    String
+  role      Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  // e.g. 'case' | 'debtor' | 'invoice' | 'user' | 'skip'
+  entity    String
+  // e.g. 'ssn' | 'dob' | 'homeAddress' | 'vin' ...
+  field     String
+  access    AccessLevel @default(hidden)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([roleId, entity, field])
+  @@index([roleId, entity])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  // SHA-256 of the opaque token; the raw token is never stored.
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  // e.g. 'auth.login' | 'auth.login.denied' | 'user.invite' | 'permission.denied'
+  action     String
+  entityType String?
+  entityId   String?
+  ipAddress  String?
+  // 'success' | 'denied' | 'failure'
+  result     String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+
+// Skeleton only — fleshed out in Phase 1 (case operations).
+model Case {
+  id              String              @id @default(cuid())
+  caseNumber      String              @unique
+  status          String              @default("intake")
+  priority        String              @default("normal") // 'low' | 'normal' | 'high'
+  notes           String?
+  source          String?             // 'rdn' | 'email' | 'manual'
+  clientId        String?
+  client          Client?             @relation(fields: [clientId], references: [id])
+  lenderId        String?
+  lender          Lender?             @relation(fields: [lenderId], references: [id])
+  debtorId        String?
+  debtor          Debtor?             @relation(fields: [debtorId], references: [id])
+  assetId         String?
+  asset           Asset?              @relation(fields: [assetId], references: [id])
+  assignedAgentId String?
+  assignedAgent   User?               @relation("CaseAssignment", fields: [assignedAgentId], references: [id])
+  addresses       Address[]
+  statusHistory   CaseStatusHistory[]
+  checkIns        CheckIn[]
+  documents       RequiredDocument[]
+  tasks           Task[]
+  photos          Photo[]
+  lotAssignments  CaseLotAssignment[]
+  inspections     InspectionChecklist[]
+  conditionReports ConditionReport[]
+  deliveryConfirmation DeliveryConfirmation?
+  invoices        Invoice[]
+  // Phase 4: skip research + client email drafts.
+  skipWorksheet   SkipWorksheet?
+  skipPulls       SkipPull[]
+  emailDrafts     EmailDraft[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([status])
+  @@index([assignedAgentId])
+}
+
+model Client {
+  id           String   @id @default(cuid())
+  name         String
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  contactCell  String?
+  notes        String?
+  cases        Case[]
+  contacts     ClientContact[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Lender {
+  id        String   @id @default(cuid())
+  name      String
+  notes     String?
+  cases     Case[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Debtor {
+  id            String    @id @default(cuid())
+  name          String
+  // --- Sensitive PII: hidden for all roles except manager (default-deny) ---
+  ssn           String?
+  dob           DateTime?
+  homeAddress   String?
+  personalPhone String?
+  email         String?
+  skipResults   Json?
+  addresses     Address[]
+  cases         Case[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  // 'given' | 'found' | 'lot' | 'delivery' — free-form label, kept simple.
+  label     String   @default("given")
+  street    String
+  city      String?
+  state     String?
+  zip       String?
+  // Geocoded coordinates for the field map (Phase 2). Nullable: older
+  // records may not have coordinates yet.
+  lat       Float?
+  lng       Float?
+  caseId    String?
+  case      Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  debtorId  String?
+  debtor    Debtor?  @relation(fields: [debtorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
+  @@index([debtorId])
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  vin       String   @unique
+  year      Int?
+  make      String?
+  model     String?
+  color     String?
+  plate     String?
+  type      String? // 'truck' | 'trailer'
+  cases     Case[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CaseStatusHistory {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  from      String?
+  to        String
+  actorId   String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+// Phase 2 — field agent workspace. A check-in is a timestamped GPS breadcrumb
+// an agent drops while working a case (arrived at address, drive-by, etc.).
+// Written to the case timeline alongside status history and notes.
+model CheckIn {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserCheckIns", fields: [userId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([caseId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model RequiredDocument {
+  id           String    @id @default(cuid())
+  caseId       String
+  case         Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // 'post_recovery_photos' | 'condition_report' | 'delivery_sheet' |
+  // 'delivery_confirmation' | 'invoice'
+  kind         String
+  // 'pending' | 'submitted' | 'approved'
+  status       String    @default("pending")
+  submittedById String?
+  submittedAt  DateTime?
+  approvedById String?
+  approvedAt   DateTime?
+  // Set when a manager rejects: why, and who must fix it.
+  rejectionNote String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([caseId, kind])
+  @@index([caseId])
+}
+
+model Task {
+  id         String    @id @default(cuid())
+  caseId     String
+  case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  assigneeId String?
+  assignee   User?     @relation("TaskAssignment", fields: [assigneeId], references: [id])
+  title      String
+  dueAt      DateTime?
+  done       Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([caseId])
+}
+
+model DevicePolicy {
+  id                                String   @id @default(cuid())
+  // 'personal' | 'company_owned'
+  name                              String   @unique
+  blockScreenshotsOnPersonalDevices Boolean  @default(true)
+  allowLocalDownloads               Boolean  @default(false)
+  notes                             String?
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — recovery to invoice. Photos, lots, inspections, delivery
+// confirmation, condition reports, invoices. Everything stays behind the
+// Phase 0/1 permission guards; PII filtering unchanged.
+// ---------------------------------------------------------------------------
+
+// A photo or scanned document stored for a case. Categories drive the
+// lot-intake flow (four sides + VIN plate + odometer) and document scans.
+model Photo {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  uploaderId  String
+  uploader    User     @relation("PhotoUploader", fields: [uploaderId], references: [id])
+  // 'four_side' | 'vin_plate' | 'odometer' | 'damage' | 'document_scan' | 'other'
+  category    String
+  storagePath String
+  mimeType    String
+  caption     String?
+  createdAt   DateTime @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+// A physical storage lot. Units move between lots; assignment history is
+// kept (never overwritten) via CaseLotAssignment.
+model Lot {
+  id          String              @id @default(cuid())
+  name        String              @unique
+  address     String?
+  notes       String?
+  assignments CaseLotAssignment[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model CaseLotAssignment {
+  id           String   @id @default(cuid())
+  caseId       String
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  lotId        String
+  lot          Lot      @relation(fields: [lotId], references: [id])
+  assignedById String
+  assignedBy   User     @relation("LotAssigner", fields: [assignedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+// Structured in-depth inspection (tires, brakes, airlines, reefer unit,
+// custom upfits...). Items are a JSON array:
+// [{ key, label, result: 'pass'|'fail'|'na', notes? }]
+model InspectionChecklist {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // 'tractor' | 'trailer'
+  assetType   String
+  items       Json
+  inspectorId String
+  inspector   User     @relation("ChecklistInspector", fields: [inspectorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+// Condition report body. Sections are free-form JSON, e.g.
+// { exterior: '...', interior: '...', mechanical: '...', notes: '...' }.
+// Tied to the condition_report required document.
+model ConditionReport {
+  id            String   @id @default(cuid())
+  caseId        String
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  sections      Json
+  submittedById String
+  submittedBy   User     @relation("ConditionReporter", fields: [submittedById], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+// Signed delivery confirmation. Tied to the delivery_confirmation document.
+model DeliveryConfirmation {
+  id           String   @id @default(cuid())
+  caseId       String   @unique
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  signedByName String
+  signedAt     DateTime @default(now())
+  lat          Float?
+  lng          Float?
+  createdAt    DateTime @default(now())
+}
+
+// Invoice record. Created only when the billing gate passes; approval
+// stays on the existing manager-only document approval endpoint.
+model Invoice {
+  id            String    @id @default(cuid())
+  caseId        String
+  case          Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  invoiceNumber String    @unique
+  amount        Float?
+  // 'pending' | 'approved'
+  status        String    @default("pending")
+  createdById   String
+  createdBy     User      @relation("InvoiceCreator", fields: [createdById], references: [id])
+  createdAt     DateTime  @default(now())
+
+  @@index([caseId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — research (skip) + client delivery (email).
+// ---------------------------------------------------------------------------
+
+// Structured skip worksheet: known addresses, phones, associates, vehicles,
+// and free-form notes. One per case, updated by agents/clerks/managers.
+model SkipWorksheet {
+  id          String   @id @default(cuid())
+  caseId      String   @unique
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  entries     Json
+  updatedById String
+  updatedBy   User     @relation("WorksheetUpdater", fields: [updatedById], references: [id])
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+// A tracked deep-pull request (InfoTracer / BeenVerified / OpenCorporates).
+// The vendor lookups themselves happen outside the system (no vendor APIs
+// exist); the request is tracked here and results/attachments are attached
+// when the pull completes.
+model SkipPull {
+  id            String    @id @default(cuid())
+  caseId        String
+  case          Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // 'infotracer' | 'beenverified' | 'opencorporates'
+  provider      String
+  requestedById String
+  requestedBy   User      @relation("PullRequester", fields: [requestedById], references: [id])
+  // 'requested' | 'complete'
+  status        String    @default("requested")
+  summary       String?
+  resultRefs    Json?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+// Contacts live on the client record (the shared company directory entry
+// for each assigning client).
+model ClientContact {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  phone     String?
+  email     String?
+  cell      String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+}
+
+// Client email templates. {{placeholders}} are rendered from case data at
+// draft time; seeded in the seed script.
+model EmailTemplate {
+  id      String @id @default(cuid())
+  // 'recovery_photos' | 'delivery_confirmation' | 'condition_report'
+  key     String @unique
+  name    String
+  subject String
+  body    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A per-case email draft moving through draft → pending_approval →
+// approved → sent, with manager reject. A sent draft is recorded in the
+// case history + audit log with its full content; see the send endpoint.
+model EmailDraft {
+  id            String    @id @default(cuid())
+  caseId        String
+  case          Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  templateKey   String
+  to            String
+  cc            String?
+  subject       String
+  body          String
+  // 'draft' | 'pending_approval' | 'approved' | 'sent' | 'rejected'
+  status        String    @default("draft")
+  rejectionNote String?
+  createdById   String
+  createdBy     User      @relation("EmailDrafter", fields: [createdById], references: [id])
+  approvedById  String?
+  approvedBy    User?     @relation("EmailApprover", fields: [approvedById], references: [id])
+  sentAt        DateTime?
+  // 'pending-smtp-config' — no SMTP is configured; the send endpoint records
+  // the intent + content, it does not deliver. Real delivery needs SMTP env
+  // config at deploy time.
+  transport     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([caseId, createdAt])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — company operations. In-app messaging, shared contact directory,
+// time-off calendar feeding dispatch availability. All staff routes are
+// gated on active accounts; suspend/revoke kills access on the next request
+// (the auth hook loads the user fresh every request).
+// ---------------------------------------------------------------------------
+
+// A conversation: 'direct' (explicit member list) or 'company_wide' (every
+// active user is a member, resolved at read/send time — no member rows
+// needed, and separated staff lose access automatically).
+model Conversation {
+  id          String   @id @default(cuid())
+  // 'direct' | 'company_wide'
+  kind        String
+  title       String?
+  createdById String
+  createdBy   User     @relation("ConversationCreator", fields: [createdById], references: [id])
+  members     ConversationMember[]
+  messages    Message[]
+  createdAt   DateTime @default(now())
+
+  @@index([kind])
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+// A message. Audit logs record the send EVENT (message.sent) with the
+// message id — never the body — to keep the audit table sane.
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  // Optional photo/video refs: [{ ref, name, mimeType }] pointing at the
+  // uploads store (see POST /uploads).
+  attachmentRefs Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// Shared company contact directory. Anyone in the company can add a
+// contact; the directory is readable by every active user (it's a company
+// directory). Edit/delete: the adder or a manager.
+model DirectoryContact {
+  id        String   @id @default(cuid())
+  name      String
+  company   String?
+  role      String?
+  phone     String?
+  email     String?
+  notes     String?
+  addedById String
+  addedBy   User     @relation("DirectoryAdder", fields: [addedById], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([company])
+}
+
+// Time-off request. Approved time off feeds GET /dispatch/availability.
+model TimeOffRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("TimeOffRequester", fields: [userId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?
+  // 'pending' | 'approved' | 'denied'
+  status      String    @default("pending")
+  decidedById String?
+  decidedBy   User?     @relation("TimeOffDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  decisionNote String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, status])
+  @@index([status])
+}
