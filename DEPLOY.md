@@ -144,10 +144,72 @@ free plan — build, start, migrations, and seed all run automatically.
   deliver yet — real SMTP config is still an open deploy item. Don't
   promise clients email delivery until that's wired.
 
-## Later: the $5/month step (when the free API's naps get annoying)
+## Railway migration runbook — the $5/month step (planned 2026-10-11)
 
-When the team is on it daily and the ~30–60 s cold start after 15 idle
-minutes gets old:
+Render's free tier is unusable: every deploy since ~00:27 UTC 2026-10-11 has
+failed with `update_failed`, including deploys of reverted code identical to
+the last working version — a platform issue, not a code issue. Craig approved
+moving to the Railway **Hobby plan ($5/mo)**. Refinement vs. the old sketch
+below: **Neon stays** (all 5 migrations already applied and validated there —
+33 tables live; no pg_dump/pg_restore needed). Railway runs the API only.
+
+**Pre-reqs (code — done 2026-10-11):** the diagnostic SMTP revert was itself
+reverted (commit `4e47275`): `apps/api/src/lib/email.ts` (nodemailer via
+`SMTP_HOST/PORT/USER/PASS`), the research-routes send path, and
+`nodemailer@6` are back in the tree. `npm run build:prod` + full API suite
+green (123/123). Still unpushed — needs the `jarvis-push` GitHub token Craig
+was sent via secure card.
+
+**Steps (👤 CRAIG + 🤖 JARVIS together):**
+
+1. Craig: sign up at [railway.app](https://railway.app) → **Hobby ($5/mo)**.
+   New project → **Deploy from GitHub repo** → select `shopmaginc/Repo-system-2`.
+   (Jarvis pushes the restored-SMTP code first, once the token lands.)
+2. In Railway, add a **deploy/start command pair** (Nixpacks auto-detects Node,
+   no Dockerfile needed):
+   - Build: `npm install --include=dev && npm run build --workspace packages/shared && npm run prisma:generate --workspace apps/api && npm run build:prod --workspace apps/api`
+   - Start: `npm start --workspace apps/api`
+   - Pre-deploy (run once from Railway shell or as deploy hook):
+     `npm run db:migrate:prod --workspace apps/api` (no-op against Neon —
+     bookkeeping already done; safety net only). **Skip `db:seed`** — the
+     manager account already exists in Neon.
+   - Health check path: `/health`
+3. Craig/Jarvis set these env vars in Railway (values from `.env.local` key
+   names and Craig's own inputs — never commit them):
+   - `NODE_ENV=production`
+   - `DATABASE_URL` — Neon pooled URL **with `channel_binding` stripped**
+     (direct pg is blocked from some networks; the pooled URL works)
+   - `JWT_SECRET` — generate fresh, ≥32 chars (invalidates old tokens; also
+     clears the "session expired" weirdness from the Render era)
+   - `SMTP_HOST=live.smtp.mailtrap.io`, `SMTP_PORT=587`, `SMTP_USER=api`,
+     `SMTP_PASS=` ← the **'repo system' Mailtrap API token — only Craig has
+     it** (Mailtrap shows it once; Jarvis cannot retrieve it). Craig pastes it
+     in the Railway dashboard himself.
+   - `STORAGE_BACKEND=s3`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+     `S3_SECRET_ACCESS_KEY`, `S3_REGION=auto` — R2 doesn't move.
+   - `CORS_ORIGIN=https://repo-manager-31d.pages.dev,https://repo-field.pages.dev`
+     (locks CORS to our two frontends instead of reflect mode)
+   - Do **NOT** set `SEED_ADMIN_*` (bootstrap only; account already exists).
+4. Verify: `curl <railway-url>/health` → 200; log in to the manager dashboard
+   build below with Craig's credentials.
+5. Rebuild both Cloudflare Pages frontends with the new API URL
+   (`VITE_API_URL=<railway-url>`): `repo-manager-31d` and `repo-field`.
+   Needs Craig's Cloudflare re-auth (token was transient 2026-10-10).
+6. Create Matt's manager account (`mattfromdelaware@gmail.com`) via the
+   dashboard Users → Add User, then run the messaging beta (Craig + Matt:
+   direct message, photo/video attach, company-wide channel).
+7. Once Craig is happy: take it live, then delete the Render service and
+   remove `SEED_ADMIN_*` leftovers from the Render env (cleanup was open).
+
+**Total after: $5/mo (Railway) + $0 (Pages, R2, Neon).** Same repo, same code —
+only env values change.
+
+## Later (superseded — see Railway runbook above)
+
+The old sketch below is kept for reference only; the runbook above replaces it.
+
+<details>
+<summary>Old $5/mo sketch (outdated: assumed Railway Postgres + pg_dump)</summary>
 
 1. Sign up at [railway.app](https://railway.app) → **Hobby plan ($5/mo)**.
 2. New project → deploy the API from the same GitHub repo; add the
@@ -161,6 +223,7 @@ minutes gets old:
 Total then: **$5/mo** (Railway) + $0 (Pages, R2, and Neon is retired).
 Same code, same repo — only the env values change, because every
 provider-specific detail lives behind environment variables.
+</details>
 
 ## What I could not verify without real accounts
 
