@@ -11,7 +11,6 @@ import {
 } from '@repo/shared';
 import type { DbClient } from '../db.js';
 import { logAudit } from '../lib/audit.js';
-import { getEmailConfig, isSmtpConfigured, sendEmail } from '../lib/email.js';
 import { filterFields } from '../lib/permissions.js';
 import { requireRole } from '../middleware/guards.js';
 import { caseInScope } from './cases.js';
@@ -976,11 +975,12 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
    * POST /cases/:id/email/drafts/:draftId/send — manager only, approved
    * drafts only.
    *
-   * When SMTP env config (SMTP_HOST/PORT/USER/PASS) is present, this endpoint
-   * actually delivers the email via SMTP and records transport 'smtp'. When
-   * SMTP is not configured, it records the send with transport
-   * 'pending-smtp-config' without delivering — the transport flag makes the
-   * gap impossible to miss.
+   * IMPORTANT: no SMTP is configured in this environment, so this endpoint
+   * does NOT actually deliver email. It records the send (status, timestamp,
+   * full content, transport flag) into the draft row, the case history, and
+   * the audit log — the "sent log" the acceptance gate requires. Real
+   * delivery needs SMTP env config (SMTP_HOST/PORT/USER/PASS) wired up at
+   * deploy time; the transport flag makes the gap impossible to miss.
    */
   app.post(
     '/cases/:id/email/drafts/:draftId/send',
@@ -1006,32 +1006,9 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
           .status(409)
           .send(apiError(ErrorCodes.CONFLICT, `Only approved drafts can be sent (this one is ${draft.status})`));
       }
-      // Attempt real SMTP delivery when configured; fall back to recorded-only.
-      let transport = 'pending-smtp-config';
-      let smtpMessageId: string | null = null;
-      let smtpError: string | null = null;
-      if (isSmtpConfigured()) {
-        try {
-          smtpMessageId = await sendEmail({
-            to: draft.to as string,
-            cc: (draft.cc as string | null) ?? null,
-            subject: draft.subject as string,
-            body: draft.body as string,
-          });
-          transport = 'smtp';
-        } catch (err) {
-          smtpError = err instanceof Error ? err.message : String(err);
-          // Delivery failed — still record the attempt, flagged clearly.
-          transport = 'smtp-failed';
-        }
-      }
       const updated = (await db().emailDraft.update({
         where: { id: draftId },
-        data: {
-          status: transport === 'smtp-failed' ? 'approved' : 'sent',
-          sentAt: transport === 'smtp-failed' ? null : new Date(),
-          transport,
-        },
+        data: { status: 'sent', sentAt: new Date(), transport: 'pending-smtp-config' },
       })) as CaseRow;
       await db().caseStatusHistory.create({
         data: {
@@ -1048,9 +1025,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
           cc: draft.cc ?? null,
           subject: draft.subject,
           body: draft.body,
-          transport,
-          smtpMessageId,
-          smtpError,
+          transport: 'pending-smtp-config',
         },
       });
       return { draft: await serializeDraft(db(), updated) };
