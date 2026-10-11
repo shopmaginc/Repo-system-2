@@ -1,0 +1,1 @@
+{"description":"Manager/office dashboard for the repossession management system","devDependencies":{"typescript":"^5.7.2","vite":"^6.4.4"},"name":"@repo/manager","private":true,"scripts":{"build":"vite build","dev":"vite","preview":"vite preview"},"type":"module","version":"1.0.0"}
