@@ -8,12 +8,14 @@
     "@repo/shared": "*",
     "bcryptjs": "3.0.2",
     "fastify": "5.2.1",
+    "nodemailer": "^10.1.0",
     "zod": "3.24.1"
   },
-  "description": "repo-system API \u2014 Phase 0: secure foundation",
+  "description": "repo-system API — Phase 0: secure foundation",
   "devDependencies": {
     "@types/bcryptjs": "2.4.6",
     "@types/node": "22.10.2",
+    "@types/nodemailer": "^8.0.2",
     "esbuild": "^0.28.2",
     "prisma": "6.2.1",
     "tsx": "4.19.2",
