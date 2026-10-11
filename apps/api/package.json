@@ -8,7 +8,7 @@
     "@repo/shared": "*",
     "bcryptjs": "3.0.2",
     "fastify": "5.2.1",
-    "nodemailer": "^10.1.0",
+    "nodemailer": "^6.10.1",
     "zod": "3.24.1"
   },
   "description": "repo-system API — Phase 0: secure foundation",
