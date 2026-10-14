@@ -176,6 +176,23 @@ export interface DbClient {
     create(args: unknown): Promise<unknown>;
     update(args: unknown): Promise<unknown>;
   };
+  // --- ALPR: plate watch lists and hit reports ---
+  plateList: {
+    findMany(args: unknown): Promise<unknown[]>;
+    findUnique(args: unknown): Promise<unknown>;
+    create(args: unknown): Promise<unknown>;
+    update(args: unknown): Promise<unknown>;
+    delete(args: unknown): Promise<unknown>;
+  };
+  plateEntry: {
+    findMany(args: unknown): Promise<unknown[]>;
+    createMany(args: unknown): Promise<{ count: number }>;
+    deleteMany(args: unknown): Promise<{ count: number }>;
+  };
+  plateHit: {
+    findMany(args: unknown): Promise<unknown[]>;
+    create(args: unknown): Promise<unknown>;
+  };
 }
 
 let client: PrismaClient | undefined;

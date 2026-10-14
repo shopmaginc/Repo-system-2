@@ -15,6 +15,7 @@ import { fieldRoutes } from './routes/field.js';
 import { recoveryRoutes, reviewQueueRoutes } from './routes/recovery.js';
 import { clientContactRoutes, emailRoutes, skipRoutes } from './routes/research.js';
 import { companyRoutes } from './routes/company.js';
+import { alprRoutes } from './routes/alpr.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -72,6 +73,7 @@ export async function buildApp({ config, db, logger = false }: BuildAppOptions):
   await app.register(clientContactRoutes, { prefix: '/clients' });
   await app.register(emailRoutes);
   await app.register(companyRoutes);
+  await app.register(alprRoutes, { prefix: '/alpr' });
 
   return app;
 }

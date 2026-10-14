@@ -533,3 +533,64 @@ export interface WeeklyReport {
     possessions: number;
   }>;
 }
+
+/** Payload for POST /alpr/lists and PUT /alpr/lists/:id. */
+export interface PlateListRequest {
+  name?: string;
+  /** Free-text client label. */
+  client?: string | null;
+  /** Full plate set — replaces any existing entries. */
+  plates: Array<{ plate: string; state?: string; notes?: string }>;
+}
+
+/** One watch list in GET /alpr/lists. */
+export interface PlateListRecord {
+  id: string;
+  name: string;
+  client?: string | null;
+  plateCount: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One entry in GET /alpr/lists/:id. */
+export interface PlateEntryRecord {
+  id: string;
+  plate: string;
+  state?: string | null;
+  notes?: string | null;
+  addedAt: string;
+}
+
+/** Payload for POST /alpr/hits. */
+export interface PlateHitRequest {
+  plate: string;
+  state?: string;
+  /** OCR confidence 0-1. */
+  confidence?: number;
+  latitude?: number;
+  longitude?: number;
+  /** ISO datetime the scan happened. */
+  scannedAt: string;
+  /** Storage ref if a hit photo was uploaded. */
+  photoRef?: string;
+  /** Which phone reported it. */
+  deviceId?: string;
+}
+
+/** One hit report in POST /alpr/hits and GET /alpr/hits. */
+export interface PlateHitRecord {
+  id: string;
+  plate: string;
+  state?: string | null;
+  confidence?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  scannedAt: string;
+  photoRef?: string | null;
+  deviceId?: string | null;
+  reportedById: string;
+  reporterName?: string | null;
+  createdAt: string;
+}

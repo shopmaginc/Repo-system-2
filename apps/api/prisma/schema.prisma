@@ -72,6 +72,9 @@ model User {
   directoryContactsAdded DirectoryContact[] @relation("DirectoryAdder")
   timeOffRequests  TimeOffRequest[]    @relation("TimeOffRequester")
   timeOffDecided   TimeOffRequest[]    @relation("TimeOffDecider")
+  // ALPR: plate lists created, hit reports filed from field phones.
+  plateListsCreated PlateList[] @relation("PlateListCreator")
+  plateHitsReported PlateHit[]  @relation("PlateHitReporter")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -619,4 +622,62 @@ model TimeOffRequest {
 
   @@index([userId, status])
   @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// ALPR — license plate reader subsystem.
+// Field phones sync PlateLists (watch lists) down and upload PlateHits up.
+// Plates are stored NORMALIZED (uppercase, no spaces/dashes) so a scan of
+// "ABC-123" matches a list entry saved as "abc 123".
+// ---------------------------------------------------------------------------
+
+model PlateList {
+  id          String       @id @default(cuid())
+  name        String
+  // Free-text client label (not a FK).
+  clientId    String?
+  createdById String
+  createdBy   User         @relation("PlateListCreator", fields: [createdById], references: [id])
+  entries     PlateEntry[]
+  hits        PlateHit[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([name])
+}
+
+model PlateEntry {
+  id      String    @id @default(cuid())
+  listId  String
+  list    PlateList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  // Normalized plate — see normalizePlate in src/lib/plates.ts.
+  plate   String
+  state   String?
+  notes   String?
+  addedAt DateTime  @default(now())
+
+  @@unique([listId, plate])
+  @@index([plate])
+}
+
+model PlateHit {
+  id          String     @id @default(cuid())
+  // Normalized plate — see normalizePlate in src/lib/plates.ts.
+  plate       String
+  state       String?
+  confidence  Float?
+  latitude    Float?
+  longitude   Float?
+  scannedAt   DateTime
+  photoRef    String?
+  // Which phone reported it (free-text device label).
+  deviceId    String?
+  listId      String?
+  list        PlateList? @relation(fields: [listId], references: [id], onDelete: SetNull)
+  reportedById String
+  reportedBy  User       @relation("PlateHitReporter", fields: [reportedById], references: [id])
+  createdAt   DateTime   @default(now())
+
+  @@index([plate])
+  @@index([createdAt])
 }
